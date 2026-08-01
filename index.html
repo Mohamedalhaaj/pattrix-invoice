@@ -505,7 +505,7 @@ ar:{
  no:'الرقم', client:'العميل', issue:'التاريخ', dueDate:'الاستحقاق', amount:'المبلغ', status:'الحالة',
  actions:'', open:'فتح', edit:'تعديل', del:'حذف', total:'الإجمالي',
  kpiCount:'عدد الفواتير', kpiTotal:'إجمالي الفواتير', kpiPaid:'المحصّل', kpiDue:'المستحق',
- thisMonth:'هذا الشهر', ofWhichOverdue:'منها متأخرة', invCount:'فاتورة',
+ thisMonth:'هذا الشهر', ofWhichOverdue:'منها متأخرة', invCount:'فاتورة', cliCount:'عملاء',
  latest:'أحدث الفواتير', topClients:'أعلى العملاء', viewAll:'عرض الكل',
  noInvoices:'لا توجد فواتير بعد.', noClients:'لا يوجد عملاء بعد.', noResults:'لا توجد نتائج مطابقة.',
  clientName:'اسم العميل', clientNameEn:'الاسم بالإنجليزية', address:'العنوان', attn:'عناية',
@@ -543,6 +543,12 @@ ar:{
  ghToken:'رمز الوصول (Token)', ghTest:'اختبار الاتصال', ghPush:'رفع نسخة الآن',
  ghOk:'تم الرفع إلى GitHub', ghFail:'فشل الاتصال بـ GitHub', ghConn:'الاتصال سليم',
  ghNever:'لم تُرفع نسخة بعد', ghLast:'آخر رفع', ghAuto:'رفع تلقائي أسبوعي عند فتح التطبيق',
+ ghRestore:'استرجاع من GitHub', ghRestoreDo:'استرجاع', ghNoBk:'لا توجد نسخ في المستودع بعد',
+ ghBadFile:'ملف النسخة تالف أو بصيغة غير متوقعة',
+ ghRestoreQ:'سيُستبدل محتوى هذا الجهاز بأحدث نسخة في المستودع.',
+ ghFromBk:'النسخة', ghThisDevice:'جهازك الآن',
+ ghRestoreWarn:'لا يمكن التراجع عن هذه العملية. إعدادات الاتصال بـ GitHub تبقى كما هي.',
+ ghRestored:'تم الاسترجاع',
  ghHint:'استخدم Fine-grained token مقصورًا على هذا المستودع بصلاحية Contents: Read and write، واجعل المستودع خاصًا. الرمز يُحفظ في متصفحك فقط.',
  ghNeedCfg:'أدخل المستودع والرمز أولًا',
  ghBlocked:'المتصفح منع الاتصال بـ GitHub. غالبًا لأن الملف مفتوح مباشرة من القرص — ارفع التطبيق على GitHub Pages ثم افتحه من الرابط.',
@@ -558,7 +564,7 @@ en:{
  no:'Number', client:'Client', issue:'Date', dueDate:'Due', amount:'Amount', status:'Status',
  actions:'', open:'Open', edit:'Edit', del:'Delete', total:'Total',
  kpiCount:'Invoices', kpiTotal:'Total billed', kpiPaid:'Collected', kpiDue:'Outstanding',
- thisMonth:'This month', ofWhichOverdue:'overdue', invCount:'invoices',
+ thisMonth:'This month', ofWhichOverdue:'overdue', invCount:'invoices', cliCount:'clients',
  latest:'Latest invoices', topClients:'Top clients', viewAll:'View all',
  noInvoices:'No invoices yet.', noClients:'No clients yet.', noResults:'No matching results.',
  clientName:'Client name', clientNameEn:'Name in English', address:'Address', attn:'Attn',
@@ -597,6 +603,12 @@ en:{
  ghToken:'Access token', ghTest:'Test connection', ghPush:'Push a backup now',
  ghOk:'Pushed to GitHub', ghFail:'GitHub connection failed', ghConn:'Connection OK',
  ghNever:'No backup pushed yet', ghLast:'Last push', ghAuto:'Weekly automatic push when the app opens',
+ ghRestore:'Restore from GitHub', ghRestoreDo:'Restore', ghNoBk:'No backups in the repository yet',
+ ghBadFile:'Backup file is corrupt or has an unexpected shape',
+ ghRestoreQ:'This device will be replaced with the latest backup in the repository.',
+ ghFromBk:'Backup', ghThisDevice:'This device now',
+ ghRestoreWarn:'This cannot be undone. Your GitHub connection settings are kept as they are.',
+ ghRestored:'Restored',
  ghHint:'Use a fine-grained token limited to this repository with Contents: Read and write, and keep the repository private. The token is stored only in your browser.',
  ghNeedCfg:'Enter the repository and token first',
  ghBlocked:'The browser blocked the connection to GitHub. This usually happens when the file is opened straight off disk — host the app on GitHub Pages and open it from the URL.',
@@ -1185,6 +1197,73 @@ async function ghAutoPush(){
   try{ await ghPush(); toast(L('ghOk')); renderApp(); }
   catch(e){ console.warn('GitHub auto-push failed:', e.message); }
 }
+// أسماء النسخ بصيغة pattrix-backup-YYYY-MM-DD.json، فترتيبها الأبجدي هو الزمني
+async function ghLatestBackup(g){
+  const folder = String(g.path||'backups').replace(/^\/+|\/+$/g,'');
+  const path   = folder ? folder.split('/').map(encodeURIComponent).join('/') : '';
+  const url    = 'https://api.github.com/repos/'+g.repo+'/contents/'+path+
+                 '?ref='+encodeURIComponent(g.branch||'main');
+  let res;
+  try{ res = await fetch(url, {headers:ghHeaders(g)}); }
+  catch(e){ throw ghNetErr(e); }
+  // مجلد غير موجود على مستودع جديد — حالة حقيقية لا عطل
+  if(res.status===404) throw new Error(L('ghNoBk'));
+  if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j.message||('HTTP '+res.status)); }
+  const list = await res.json();
+  if(!Array.isArray(list)) throw new Error(L('ghNoBk'));
+  const files = list.filter(f=> f.type==='file' && /^pattrix-backup-.+\.json$/i.test(f.name))
+                    .sort((a,b)=> b.name.localeCompare(a.name));
+  if(!files.length) throw new Error(L('ghNoBk'));
+  return files[0];
+}
+async function ghPull(){
+  const g=ghCfg();
+  if(!g.repo || !g.token) throw new Error(L('ghNeedCfg'));
+  const file = await ghLatestBackup(g);
+  let res;
+  // raw بدل base64: يتجاوز حد المليون بايت ويُسقط فك ترميز العربية
+  try{
+    res = await fetch(file.url, {headers:Object.assign({}, ghHeaders(g), {Accept:'application/vnd.github.raw'})});
+  }catch(e){ throw ghNetErr(e); }
+  if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j.message||('HTTP '+res.status)); }
+  let data;
+  try{ data = JSON.parse(await res.text()); }
+  catch(e){ throw new Error(L('ghBadFile')); }
+  if(!data || typeof data!=='object' || !Array.isArray(data.invoices) || !Array.isArray(data.clients))
+    throw new Error(L('ghBadFile'));
+  return { data, name:file.name };
+}
+async function ghRestore(){
+  const { data, name } = await ghPull();
+  const dt = (/(\d{4}-\d{2}-\d{2})/.exec(name)||[])[1] || name;
+  const line = (lb, inv, cli) =>
+    `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:14px">
+       <span class="f">${esc(lb)}</span>
+       <b style="font-size:14px">${fmt0(inv)} ${esc(L('invCount'))} · ${fmt0(cli)} ${esc(L('cliCount'))}</b>
+     </div>`;
+  return new Promise(resolve=>{
+    modal(L('ghRestore'),
+      `<p style="margin:0 0 12px;font-size:13.5px;line-height:1.6">${esc(L('ghRestoreQ'))}</p>
+       <div style="display:grid;gap:9px">
+         ${line(L('ghFromBk')+' · '+dt, data.invoices.length, data.clients.length)}
+         ${line(L('ghThisDevice'), DB.invoices.length, DB.clients.length)}
+       </div>
+       <p class="hint" style="color:var(--warn);font-weight:600;margin:12px 0 0">${esc(L('ghRestoreWarn'))}</p>`,
+      `<button class="btn" data-x="no">${esc(L('cancel'))}</button>
+       <button class="btn primary" data-x="yes">${esc(L('ghRestoreDo'))}</button>`,
+      m=>{
+        m.querySelector('[data-x="no"]').onclick=()=>{ closeModal(); resolve(false); };
+        m.querySelector('[data-x="yes"]').onclick=()=>{
+          const keepGh = DB.settings.gh;   // التوكن والمستودع يخصّان هذا الجهاز لا النسخة
+          DB = Object.assign({v:APP_VERSION, clients:[], invoices:[], catalog:[], settings:freshSettings()}, data);
+          DB.settings = Object.assign(freshSettings(), data.settings||{});
+          DB.settings.gh = keepGh;
+          uiLang = DB.settings.uiLang || 'ar';
+          saveDB(); closeModal(); renderApp(); resolve(true);
+        };
+      });
+  });
+}
 
 /* ============================ merge import ============================ */
 function mergeInto(d){
@@ -1689,6 +1768,7 @@ function viewSettings(){
         <div class="rowflex" style="margin-top:8px">
           <button class="btn" id="ghT">${esc(L('ghTest'))}</button>
           <button class="btn primary" id="ghP">${esc(L('ghPush'))}</button>
+          <button class="btn" id="ghR">${esc(L('ghRestore'))}</button>
         </div>
         <p class="hint" id="ghStatus">${esc(g.lastPush ? L('ghLast')+': '+g.lastPush : L('ghNever'))}</p>
         ${location.protocol==='file:' ? `<p class="hint" style="color:var(--warn);font-weight:600">${esc(L('ghFileWarn'))}</p>` : ''}
@@ -1729,6 +1809,15 @@ function viewSettings(){
     try{ await ghPush(); st.textContent=L('ghLast')+': '+DB.settings.gh.lastPush; st.style.color='var(--ok)'; toast(L('ghOk')); }
     catch(e){ st.textContent=L('ghFail')+': '+e.message; st.style.color='var(--bad)'; }
     finally{ busy(false); }
+  };
+  $('#ghR').onclick=async()=>{
+    const st=$('#ghStatus'); st.textContent='…'; st.style.color='';
+    try{
+      const done = await ghRestore();
+      if(done) toast(L('ghRestored'));
+      else { st.textContent = DB.settings.gh.lastPush ? L('ghLast')+': '+DB.settings.gh.lastPush : L('ghNever'); }
+    }
+    catch(e){ st.textContent=L('ghFail')+': '+e.message; st.style.color='var(--bad)'; }
   };
   $('#bkGo').onclick=doBackup;
   $('#bkIn').onclick=()=>$('#bkFile').click();
