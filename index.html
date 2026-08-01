@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pattrix — نظام الفواتير</title>
 <style>
 /* ============ FONTS (embedded, works offline) ============ */
@@ -160,7 +160,7 @@ details.sec>summary:hover{background:#fafbfd;color:var(--ink)}
 .itemRow .idx{font-size:11.5px;font-weight:700;color:var(--brand);text-align:center;padding-top:9px}
 .itemRow .in{padding:7px 9px;font-size:13px}
 .itemRow .cell{display:flex;flex-direction:column;gap:5px}
-.itemRow textarea.note{min-height:0;height:32px;line-height:1.45;font-size:12px;color:var(--mid);overflow:hidden}
+.itemRow textarea.note{min-height:0;height:32px;flex:0 0 auto;line-height:1.45;font-size:12px;color:var(--mid);overflow:hidden}
 .itemRow textarea.note:focus{color:var(--ink)}
 .itemRow .x{border:none;background:none;color:var(--muted);cursor:pointer;font-size:17px;line-height:1;padding:6px 2px;border-radius:5px}
 .itemRow .x:hover{background:#fdeeee;color:#c33}
@@ -302,6 +302,119 @@ table.items tr.blank td{height:6.6mm}
   .cols2{grid-template-columns:1fr}
   #editor{flex-direction:column}
   #formPane{width:100%;flex:0 0 auto;max-height:50vh;border-inline-end:none;border-bottom:1px solid var(--line)}
+}
+/* ============ MOBILE ============ */
+/* الشريط الجانبي يصبح شريط تبويبات سفلي في متناول الإبهام */
+@media (max-width:760px){
+  #app{flex-direction:column;height:100vh;height:100dvh}
+  aside.side{display:contents}
+
+  /* شريط علوي رفيع: الهوية */
+  aside.side .brand{
+    order:1;flex:0 0 auto;height:48px;padding:0 14px;margin:0;
+    background:#fff;border-bottom:1px solid var(--line);
+    padding-top:env(safe-area-inset-top);height:calc(48px + env(safe-area-inset-top));
+  }
+  aside.side .brand img{height:18px}
+
+  /* مبدّل اللغة يثبت في الطرف المقابل من الشريط العلوي */
+  aside.side .sidefoot{
+    position:fixed;top:env(safe-area-inset-top);inset-inline-end:10px;
+    height:48px;display:flex;align-items:center;
+    margin:0;padding:0;border-top:none;z-index:31;
+  }
+  aside.side .sidefoot .ver{display:none}
+  #btnUiLang{width:auto!important;padding:7px 12px;min-height:36px}
+
+  section.main{order:2;flex:1 1 auto;min-height:0}
+
+  /* شريط التبويبات السفلي */
+  nav.nav{
+    order:3;flex:0 0 auto;flex-direction:row;gap:0;
+    background:#fff;border-top:1px solid var(--line);
+    padding:5px 4px;padding-bottom:calc(5px + env(safe-area-inset-bottom));
+  }
+  nav.nav button{
+    flex:1 1 0;min-width:0;position:relative;
+    flex-direction:column;justify-content:center;gap:4px;
+    min-height:50px;padding:6px 2px;border-radius:10px;
+    font-size:10.5px;line-height:1.2;text-align:center;
+  }
+  nav.nav button svg{width:20px;height:20px}
+  nav.nav button span:not(.count){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+  nav.nav .count{
+    position:absolute;top:3px;inset-inline-end:calc(50% - 22px);
+    margin:0;font-size:9.5px;padding:0 5px;min-width:15px;text-align:center;
+  }
+
+  /* المحتوى: عمود واحد وحواف أضيق */
+  header.viewbar{padding:11px 14px;gap:9px}
+  header.viewbar h2{font-size:15.5px}
+  #viewHost{padding:14px}
+  .grid,.grid.g3{grid-template-columns:1fr}
+
+  /* الجدول يتحول إلى بطاقات — لا تمرير أفقي ولا أعمدة مقصوصة */
+  /* الصفوف تصير بطاقات، فتُجرَّد البطاقة الحاوية حتى لا تتداخل بطاقة داخل بطاقة */
+  .card:has(.tblwrap){background:transparent;border:none;box-shadow:none;border-radius:0}
+  .tblwrap{max-height:none;overflow:visible;background:transparent;border:none;box-shadow:none}
+  table.tbl thead{display:none}
+  table.tbl,table.tbl tbody,table.tbl tr,table.tbl td{display:block;width:100%}
+  table.tbl tr{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    box-shadow:var(--sh);padding:12px 14px;margin-bottom:10px;
+  }
+  table.tbl tr:last-child{margin-bottom:0}
+  table.tbl tbody tr:hover{background:var(--card)}
+  table.tbl td{
+    padding:6px 0;border-bottom:none;white-space:normal;
+    display:flex;align-items:center;justify-content:flex-start;gap:6px;
+    font-size:13px;text-align:end;
+  }
+  table.tbl td[data-lb]::before{
+    content:attr(data-lb);
+    flex:0 0 auto;margin-inline-end:auto;padding-inline-end:14px;
+    font-size:11px;font-weight:700;color:var(--muted);text-align:start;
+  }
+  /* رقم الفاتورة عنوان البطاقة، والمبلغ هو الرقم الذي يُبحث عنه */
+  table.tbl td[data-k="hd"]{
+    padding:0 0 8px;margin-bottom:6px;border-bottom:1px solid var(--line);
+    font-size:15px;font-weight:700;
+  }
+  table.tbl td[data-k="hd"]::before{font-size:10.5px}
+  table.tbl td[data-k="amt"]{font-size:16px}
+  table.tbl td.acts{
+    justify-content:flex-start;flex-wrap:wrap;gap:8px;white-space:normal;
+    padding:10px 0 0;margin-top:6px;border-top:1px solid var(--line);
+  }
+  table.tbl td.acts .btn{opacity:1}
+
+  /* المحرّر: عمود واحد يمرّر كاملًا — النموذج أولًا ثم المعاينة تحته */
+  #editor{display:block;height:auto;min-height:0}
+  #formPane{
+    width:100%;flex:none;max-height:none;overflow:visible;
+    border-inline-end:none;border-bottom:1px solid var(--line);padding:0 0 18px;
+  }
+  #previewPane{padding:14px;overflow:visible;gap:12px}
+  #previewToolbar{width:100%}
+}
+/* الوضع الأفقي: الارتفاع هو النادر، فتُضغط الأشرطة ويصطف الرمز مع النص */
+@media (max-width:760px) and (max-height:460px){
+  aside.side .brand{height:calc(38px + env(safe-area-inset-top));padding:0 12px}
+  aside.side .brand img{height:15px}
+  aside.side .sidefoot{height:38px}
+  nav.nav{padding:3px 4px;padding-bottom:calc(3px + env(safe-area-inset-bottom))}
+  nav.nav button{flex-direction:row;justify-content:center;gap:7px;min-height:38px;font-size:12px}
+  nav.nav button svg{width:17px;height:17px}
+  nav.nav .count{position:static;margin:0}
+}
+/* أهداف لمس أكبر على الشاشات اللمسية */
+@media (pointer:coarse){
+  .btn{padding:10px 15px;min-height:40px}
+  .btn.sm{padding:8px 12px;min-height:36px}
+}
+/* أزرار الصف تظهر بالتحويم — واللمس لا يحوّم. أظهرها دائمًا */
+@media (hover:none){
+  table.tbl td.acts .btn{opacity:1}
 }
 </style>
 </head>
@@ -1333,12 +1446,12 @@ function paintInvoiceTable(){
     <tbody>${list.map(i=>{
       const st=invStatus(i);
       return `<tr>
-        <td><a class="linky" data-open="${i.id}">${esc(i.no)}</a></td>
-        <td>${i.clientId?`<a class="linky" data-cl="${i.clientId}" style="font-weight:400">${esc(invClientName(i))}</a>`:esc(invClientName(i))}</td>
-        <td class="num" style="color:var(--mid)">${esc(i.issue||'')}</td>
-        <td class="num" style="color:${st==='overdue'?'var(--bad)':'var(--mid)'}">${esc(i.due||'—')}</td>
-        <td class="num strong">${fmt(invAmount(i))} <span style="font-size:11px;color:var(--muted)">${esc(i.cur||'LYD')}</span></td>
-        <td><span class="pill ${st}"><i></i>${esc(L(st))}</span></td>
+        <td data-lb="${esc(L('no'))}" data-k="hd"><a class="linky" data-open="${i.id}">${esc(i.no)}</a></td>
+        <td data-lb="${esc(L('client'))}">${i.clientId?`<a class="linky" data-cl="${i.clientId}" style="font-weight:400">${esc(invClientName(i))}</a>`:esc(invClientName(i))}</td>
+        <td data-lb="${esc(L('issue'))}" class="num" style="color:var(--mid)">${esc(i.issue||'')}</td>
+        <td data-lb="${esc(L('dueDate'))}" class="num" style="color:${st==='overdue'?'var(--bad)':'var(--mid)'}">${esc(i.due||'—')}</td>
+        <td data-lb="${esc(L('amount'))}" data-k="amt" class="num strong">${fmt(invAmount(i))} <span style="font-size:11px;color:var(--muted)">${esc(i.cur||'LYD')}</span></td>
+        <td data-lb="${esc(L('status'))}"><span class="pill ${st}"><i></i>${esc(L(st))}</span></td>
         <td class="acts">
           <button class="btn tiny ${i.paid?'':'primary'}" data-pay="${i.id}">${i.paid?esc(L('undoPaid')):ICON.check+esc(L('markPaid'))}</button>
           <button class="btn tiny" data-pdf="${i.id}">PDF</button>
@@ -1404,12 +1517,12 @@ function paintClients(){
     <tbody>${list.map(c=>{
       const s=clientStats(c.id);
       return `<tr>
-        <td><a class="linky" data-cl="${c.id}">${esc(clientName(c))}</a></td>
-        <td class="num" style="color:var(--mid)">${esc(c.phone||'—')}</td>
-        <td class="num">${fmt0(s.n)}</td>
-        <td class="num strong">${fmt(s.total)}</td>
-        <td class="num" style="color:var(--ok)">${fmt(s.paid)}</td>
-        <td class="num" style="color:${s.rest>0?'var(--bad)':'var(--muted)'}">${fmt(s.rest)}</td>
+        <td data-lb="${esc(L('clientName'))}" data-k="hd"><a class="linky" data-cl="${c.id}">${esc(clientName(c))}</a></td>
+        <td data-lb="${esc(L('phone'))}" class="num" style="color:var(--mid)">${esc(c.phone||'—')}</td>
+        <td data-lb="${esc(L('invoices'))}" class="num">${fmt0(s.n)}</td>
+        <td data-lb="${esc(L('billed'))}" data-k="amt" class="num strong">${fmt(s.total)}</td>
+        <td data-lb="${esc(L('collected'))}" class="num" style="color:var(--ok)">${fmt(s.paid)}</td>
+        <td data-lb="${esc(L('outstanding'))}" class="num" style="color:${s.rest>0?'var(--bad)':'var(--muted)'}">${fmt(s.rest)}</td>
         <td class="acts">
           <button class="btn tiny" data-ed="${c.id}">${esc(L('edit'))}</button>
           <button class="btn tiny danger" data-dl="${c.id}">${esc(L('del'))}</button></td></tr>`;
