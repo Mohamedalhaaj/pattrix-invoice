@@ -1,0 +1,9 @@
+# بيانات حساسة — لا تُرفع أبدًا
+Pattrix-backup-*.json
+pattrix-backup-*.json
+Pattrix-فواتير-*.json
+*.json
+!package.json
+
+# ملفات النظام
+.DS_Store
