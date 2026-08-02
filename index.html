@@ -143,7 +143,9 @@ table.tbl tfoot td{font-size:12.5px;font-weight:700;padding:11px 14px;border-top
 /* ============ EDITOR ============ */
 #editor{display:flex;height:100%;min-height:0}
 #formPane{width:392px;flex:0 0 392px;overflow-y:auto;background:#fff;border-inline-end:1px solid var(--line);padding:0 0 60px}
-#previewPane{flex:1;overflow:auto;background:var(--bg);padding:22px;display:flex;flex-direction:column;align-items:center;gap:18px}
+/* safe center: عند تجاوز الصفحة عرض اللوحة يُحاذى للبداية بدل التوسيط،
+   فالتوسيط يدفع الجانب الأول خارج مدى التمرير ويجعله غير قابل للوصول */
+#previewPane{flex:1;overflow:auto;background:var(--bg);padding:22px;display:flex;flex-direction:column;align-items:center;align-items:safe center;gap:18px}
 .pad{padding:16px 18px}
 .block{border-bottom:1px solid #eef0f4}
 .blockTitle{font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--muted);margin:0 0 12px}
@@ -411,6 +413,8 @@ table.items tr.blank td{height:6.6mm}
 @media (pointer:coarse){
   .btn{padding:10px 15px;min-height:40px}
   .btn.sm{padding:8px 12px;min-height:36px}
+  /* أزرار الصف هي طريقة التعامل مع الفاتورة على الهاتف، فحشوتها 3px لا تكفي إصبعًا */
+  .btn.tiny{padding:8px 13px;min-height:38px;font-size:12px}
 }
 /* أزرار الصف تظهر بالتحويم — واللمس لا يحوّم. أظهرها دائمًا */
 @media (hover:none){
@@ -461,8 +465,11 @@ const fmt0 = n => (isFinite(n)?n:0).toLocaleString('en-US',{maximumFractionDigit
 const num = v => { const n=parseFloat(String(v).replace(/,/g,'')); return isFinite(n)?n:0; };
 const r2  = n => Math.round(n*100)/100;
 const uid = p => p+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-const todayISO = () => new Date().toISOString().slice(0,10);
-function addDays(iso, d){ const t=new Date(iso+'T00:00:00'); t.setDate(t.getDate()+Number(d||0)); return t.toISOString().slice(0,10); }
+// التواريخ محلية لا UTC: toISOString يحوّل إلى UTC، وليبيا +2، فكان يوم التاريخ
+// يتقدّم يومًا للوراء — والفواتير المنشأة بعد منتصف الليل تحمل تاريخ الأمس.
+const isoOf = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const todayISO = () => isoOf(new Date());
+function addDays(iso, d){ const t=new Date(iso+'T00:00:00'); t.setDate(t.getDate()+Number(d||0)); return isoOf(t); }
 function daysBetween(a,b){ return Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00'))/86400000); }
 function download(blob, filename){
   const a=document.createElement('a');
@@ -506,6 +513,7 @@ ar:{
  actions:'', open:'فتح', edit:'تعديل', del:'حذف', total:'الإجمالي',
  kpiCount:'عدد الفواتير', kpiTotal:'إجمالي الفواتير', kpiPaid:'المحصّل', kpiDue:'المستحق',
  thisMonth:'هذا الشهر', ofWhichOverdue:'منها متأخرة', invCount:'فاتورة', cliCount:'عملاء',
+ dup:'نسخ', dupDone:'أُنشئت نسخة جديدة',
  latest:'أحدث الفواتير', topClients:'أعلى العملاء', viewAll:'عرض الكل',
  noInvoices:'لا توجد فواتير بعد.', noClients:'لا يوجد عملاء بعد.', noResults:'لا توجد نتائج مطابقة.',
  clientName:'اسم العميل', clientNameEn:'الاسم بالإنجليزية', address:'العنوان', attn:'عناية',
@@ -565,6 +573,7 @@ en:{
  actions:'', open:'Open', edit:'Edit', del:'Delete', total:'Total',
  kpiCount:'Invoices', kpiTotal:'Total billed', kpiPaid:'Collected', kpiDue:'Outstanding',
  thisMonth:'This month', ofWhichOverdue:'overdue', invCount:'invoices', cliCount:'clients',
+ dup:'Duplicate', dupDone:'Duplicate created',
  latest:'Latest invoices', topClients:'Top clients', viewAll:'View all',
  noInvoices:'No invoices yet.', noClients:'No clients yet.', noResults:'No matching results.',
  clientName:'Client name', clientNameEn:'Name in English', address:'Address', attn:'Attn',
@@ -1533,6 +1542,7 @@ function paintInvoiceTable(){
         <td data-lb="${esc(L('status'))}"><span class="pill ${st}"><i></i>${esc(L(st))}</span></td>
         <td class="acts">
           <button class="btn tiny ${i.paid?'':'primary'}" data-pay="${i.id}">${i.paid?esc(L('undoPaid')):ICON.check+esc(L('markPaid'))}</button>
+          <button class="btn tiny" data-dup="${i.id}">${esc(L('dup'))}</button>
           <button class="btn tiny" data-pdf="${i.id}">PDF</button>
           <button class="btn tiny danger" data-del="${i.id}">${esc(L('del'))}</button>
         </td></tr>`;
@@ -1549,6 +1559,7 @@ function paintInvoiceTable(){
   $$('#tblHost [data-open]').forEach(a=>a.onclick=()=>go('editor',a.dataset.open));
   $$('#tblHost [data-cl]').forEach(a=>a.onclick=()=>go('client',a.dataset.cl));
   $$('#tblHost [data-pay]').forEach(b=>b.onclick=()=>togglePaid(b.dataset.pay));
+  $$('#tblHost [data-dup]').forEach(b=>b.onclick=()=>duplicateAndOpen(b.dataset.dup));
   $$('#tblHost [data-pdf]').forEach(b=>b.onclick=()=>{
     const inv=DB.invoices.find(x=>x.id===b.dataset.pdf); if(inv) downloadPDF(inv);
   });
@@ -1854,6 +1865,30 @@ function newInvoiceObj(clientId){
     createdAt:todayISO(), updatedAt:todayISO(), isNew:true,
   };
 }
+// نسخة جديدة من فاتورة: تبقى البنود والعميل والشروط، ويتجدّد كل ما يخصّ الهوية والسداد
+function duplicateInvoice(src){
+  const s=DB.settings;
+  const c=JSON.parse(JSON.stringify(src));
+  // فجوة الاستحقاق تُحفظ لا التاريخ نفسه — الفواتير المتكرّرة تحتفظ بمهلتها
+  const gap=(src.issue && src.due) ? daysBetween(src.issue, src.due) : null;
+  c.id=uid('inv'); c.no=peekNextNo(); c.seq=(s.seq||0)+1; c.ref='';
+  c.issue=todayISO();
+  c.due=(gap!=null && gap>=0) ? addDays(todayISO(), gap) : '';
+  c.paid=false; c.paidAt=null;
+  c.snap=Object.assign({}, s);          // إعدادات اليوم لا إعدادات الأصل
+  c.createdAt=todayISO(); c.updatedAt=todayISO();
+  delete c.isNew;
+  return c;
+}
+function duplicateAndOpen(id){
+  const src=DB.invoices.find(x=>x.id===id); if(!src) return;
+  autosaveEditor();
+  const c=duplicateInvoice(src);
+  DB.invoices.push(c);
+  if(c.seq && c.seq > (DB.settings.seq||0)) DB.settings.seq=c.seq;
+  saveDB(); renderNav(); toast(L('dupDone'));
+  go('editor', c.id);
+}
 function autosaveEditor(){
   if(!S) return;
   const hasContent = S.clientId || (S.items||[]).some(i=>String(i.descAr||i.descEn).trim()!=='' || num(i.price)!==0);
@@ -2011,7 +2046,13 @@ function readForm(){
   S.adjPct=num(S.adjPct); S.advance=num(S.advance);
   S.clientId = $('#f_client').value || null;
 }
-function autoGrow(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,150)+'px'; }
+// الحقل الفارغ: scrollHeight يحسب سطور النص النائب فيبالغ، والأساس هنا هو ارتفاع CSS.
+// وعنصر خارج الـ DOM ارتفاع تمريره صِفر، فالحد الأدنى يمنع انهياره إلى حشوته وحدها.
+function autoGrow(el){
+  if(!el.value){ el.style.height='32px'; return; }
+  el.style.height='auto';
+  el.style.height=Math.max(32,Math.min(el.scrollHeight,150))+'px';
+}
 function renderItemsEditor(){
   const host=$('#itemsEditor'); host.innerHTML='';
   S.items.forEach((it,i)=>{
@@ -2033,6 +2074,8 @@ function renderItemsEditor(){
     });
     row.querySelector('.x').onclick=()=>{ S.items.splice(i,1); if(!S.items.length) S.items.push(blankItem()); renderItemsEditor(); renderEditor(); };
     host.appendChild(row);
+    // القياس بعد الإلحاق: قبله scrollHeight صِفر فيُقصّ النص
+    row.querySelectorAll('textarea').forEach(autoGrow);
   });
   syncBilingual();
 }
@@ -2061,6 +2104,26 @@ function renderEditor(){
   setPage($('#pageAr'), S, 'ar');
   setPage($('#pageEn'), S, 'en');
   syncBilingual();
+}
+// transform لا يغيّر مقاس التخطيط، فالتصغير وحده لا يحرّر أي عرض.
+// الهوامش السالبة تُنقص البصمة بقدر ما ينقصه التحجيم فعلًا.
+function applyZoom(z){
+  $$('.pageWrap').forEach(w=>{
+    const bw=w.offsetWidth;
+    w.style.transform=`scale(${z})`;
+    w.style.marginBottom=`${(z-1)*1120}px`;
+    w.style.marginInline=`${-bw*(1-z)/2}px`;
+  });
+}
+// عند فتح المحرّر: صغّر الصفحة لتسع عرض اللوحة بدل أن تُقصّ
+function fitZoom(){
+  const pane=$('#previewPane'), w=$('.pageWrap'), sl=$('#zoom');
+  if(!pane||!w) return;
+  const cs=getComputedStyle(pane);
+  const avail=pane.clientWidth - parseFloat(cs.paddingInlineStart||cs.paddingLeft) - parseFloat(cs.paddingInlineEnd||cs.paddingRight);
+  const z=Math.max(0.4, Math.min(1, avail/w.offsetWidth));
+  if(sl) sl.value=Math.round(z*100);
+  applyZoom(z);
 }
 function setPreviewTab(v){
   currentView=v;
@@ -2092,10 +2155,8 @@ function wireEditor(){
     e.target.value=''; renderItemsEditor(); renderEditor();
   };
   $$('#langTabs button').forEach(b=>b.onclick=()=>setPreviewTab(b.dataset.v));
-  $('#zoom').oninput=e=>{
-    const z=e.target.value/100;
-    $$('.pageWrap').forEach(w=>{ w.style.transform=`scale(${z})`; w.style.marginBottom=`${(z-1)*1120}px`; });
-  };
+  $('#zoom').oninput=e=>applyZoom(e.target.value/100);
+  fitZoom();
   $('#saveBtn').onclick=()=>{ readForm(); persistInvoice(); renderNav(); toast(L('saved')); };
   $('#payBtn').onclick=()=>{
     readForm(); S.paid=!S.paid; S.paidAt=S.paid?todayISO():null; persistInvoice(); viewEditor();
